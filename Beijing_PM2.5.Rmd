@@ -1,0 +1,104 @@
+---
+title: "Beijing PM2.5"
+author: "Edward Zhang"
+date: "5/25/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(ggplot2)
+library(corrplot)
+
+```
+
+
+```{r}
+bjpm25 <- read.table("/Users/edwzhang/Downloads/PRSA_data_2010.1.1-2014.12.31.csv", header=TRUE, sep=",");
+
+
+```
+
+```{r}
+bjpm25new <- na.omit(bjpm25)
+
+```
+
+```{r}
+bjpm25new$month[bjpm25new$month<10] = paste('0',bjpm25new$month[bjpm25new$month<10], sep = "")
+bjpm25new$day[bjpm25new$day<10] = paste('0',bjpm25new$day[bjpm25new$day<10], sep = "")
+bjpm25new$hour[bjpm25new$hour<10] = paste('0',bjpm25new$hour[bjpm25new$hour<10], sep = "")
+bjpm25new['time'] = as.Date(do.call(paste0, bjpm25new[c(2, 3, 4, 5)]), "%Y%m%d%H")
+
+```
+
+```{r}
+#bjpm25new['IwsCat'] = cut(bjpm25new$Iws, c(0,1,5,11,19,28,38,49,61,74,88,102,117,570))
+bjpm25new['IwsCat'] = cut(bjpm25new$Iws, c(0,5,19,38,61,88,117,570))
+bjpm25new['pm25Cat'] = cut(bjpm25new$Iws, c(0,50,100,150,200,300,1000))
+
+```
+
+```{r}
+ggplot(data=bjpm25new, aes(x=time,y=pm2.5, size =IwsCat , color = cbwd)) +
+  geom_point() +
+  scale_x_date(date_breaks = "3 month")
+
+```
+
+```{r}
+ggplot(data=bjpm25new, aes(x=time,y=Iws,  size = pm25Cat, color = cbwd)) +
+  geom_point() +
+  scale_x_date(date_breaks = "3 month")
+
+```
+
+```{r}
+ggplot(data=bjpm25new, aes(x=pm2.5)) +
+  geom_histogram() +
+  facet_wrap(~year, nrow = 2)
+
+```
+
+```{r}
+ggplot(data=bjpm25new, aes(x=pm2.5)) +
+  geom_histogram() +
+  facet_wrap(~month, nrow = 2)
+
+```
+
+```{r}
+ggplot(data=bjpm25new, aes(x=pm2.5)) +
+  geom_histogram() +
+  facet_wrap(~hour, nrow = 2)
+
+```
+
+```{r}
+corrplot(cor(bjpm25new[,c('pm2.5','DEWP','TEMP','PRES','Iws','Ir','Is')]), method = "circle")
+
+```
+
