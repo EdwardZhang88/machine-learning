@@ -9,96 +9,171 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 ```{r}
 library(ggplot2)
 library(corrplot)
+library(dplyr)
 
 ```
 
-
+####读取文件。
 ```{r}
 bjpm25 <- read.table("/Users/edwzhang/Downloads/PRSA_data_2010.1.1-2014.12.31.csv", header=TRUE, sep=",");
 
+```
+
+####生成按年，按月，按周和按日的日期。
+```{r}
+bjpm25$month[bjpm25$month<10] = paste('0',bjpm25$month[bjpm25$month<10], sep = "")
+bjpm25$day[bjpm25$day<10] = paste('0',bjpm25$day[bjpm25$day<10], sep = "")
+bjpm25['date'] = as.Date(do.call(paste0, bjpm25[c(2, 3, 4)]), "%Y%m%d")
+bjpm25$yearDate = as.Date(cut(bjpm25$date, breaks = 'year'))
+bjpm25$monthDate = as.Date(cut(bjpm25$date, breaks = 'month'))
+bjpm25$weekDate = as.Date(cut(bjpm25$date, breaks = 'week', start.on.monday = TRUE))
 
 ```
 
+
+####考虑到存在全天PM2.5数据完全缺失，用当周均值来填补NA。
 ```{r}
-bjpm25new <- na.omit(bjpm25)
+indx <- which(is.na(bjpm25$pm2.5), arr.ind = TRUE)
+for (id in indx){
+  bjpm25[id,'pm2.5'] <- mean( subset( bjpm25,weekDate==bjpm25[id,'weekDate'] )$pm2.5, na.rm=TRUE )
+}
 
 ```
 
+####按照PM2.5中国国家标准对数据添加分类。如果当时PM2.5计数是0，那么也划入一级。
+####![PM2.5中国国家标准](PM2dot5Standard.png)
 ```{r}
-bjpm25new$month[bjpm25new$month<10] = paste('0',bjpm25new$month[bjpm25new$month<10], sep = "")
-bjpm25new$day[bjpm25new$day<10] = paste('0',bjpm25new$day[bjpm25new$day<10], sep = "")
-bjpm25new$hour[bjpm25new$hour<10] = paste('0',bjpm25new$hour[bjpm25new$hour<10], sep = "")
-bjpm25new['time'] = as.Date(do.call(paste0, bjpm25new[c(2, 3, 4, 5)]), "%Y%m%d%H")
+bjpm25['pm25Cat'] = cut(bjpm25$pm2.5, c(0,50,100,150,200,300,1000), labels=c('I','II','III','IV','V','VI'))
+bjpm25$pm25Cat[bjpm25$pm2.5==0] <- 'I'
 
 ```
 
+####对累计风速按照蒲福氏风级进行划分。由于是累计值，虽然这样划分不够严谨，但至少也能反映趋势。
+####0 - 2 km/h; 0 - 0.5 m/s -> Calm
+####2 - 12 km/h; 0.5 - 3.3 m/s -> Light
+####12 - 20 km/h; 3.3 - 5.5 m/s -> Gentle
+####20 - 30 km/h; 5.5 - 8.3 m/s -> Moderate
+####30 - 40 km/h; 8.3 - 11.1 m/s -> Fresh
+####40 - 50 km/h; 11.1 - 13.8 m/s -> Strong
+####50 - 88 km/h; 13.8 - 24.4 m/s -> Gale
+####88 - 118 km/h; 24.4 - 32.7 m/s -> Storm
+####118 and above; 32.7 m/s and above -> Hurricane
 ```{r}
-#bjpm25new['IwsCat'] = cut(bjpm25new$Iws, c(0,1,5,11,19,28,38,49,61,74,88,102,117,570))
-bjpm25new['IwsCat'] = cut(bjpm25new$Iws, c(0,5,19,38,61,88,117,570))
-bjpm25new['pm25Cat'] = cut(bjpm25new$Iws, c(0,50,100,150,200,300,1000))
+bjpm25['IwsCat'] = cut(bjpm25$Iws, c(0,0.5,3.3,5.5,8.3,11.1,13.8,24.4,32.7,600),labels=c('Calm','Light','Gentle','Moderate','Fresh','Strong','Gale','Storm','Hurricane'))
+  
+```
+
+####北京PM2.5按年分布图
+```{r}
+ggplot(bjpm25 %>% count(yearDate, pm25Cat) %>%    
+       mutate(pct=n/sum(n), ypos = cumsum(n) - 0.5*n),  
+       aes(yearDate, n/24, fill=pm25Cat)) +
+  geom_bar(stat="identity") +
+  scale_x_date(date_labels = "%Y") +
+  scale_fill_manual(values = c("green", "yellow", "orange","red",'purple','dark red'), guide = guide_legend(title = "PM2.5 Level")) +
+  ggtitle("Beijing PM 2.5 per year") +
+  coord_flip() +
+  labs(y="Count of days",x="Year") +
+  geom_text(aes(label=paste0(sprintf("%1.1f", pct*100),"%"), y=ypos/24))
 
 ```
 
+#####总体来看，2010到2012年三年中空气质量逐年好转，但是2013年又急速恶化。2014年略有提高。  
+
+####北京PM2.5按月分布图
 ```{r}
-ggplot(data=bjpm25new, aes(x=time,y=pm2.5, size =IwsCat , color = cbwd)) +
-  geom_point() +
-  scale_x_date(date_breaks = "3 month")
+ggplot(bjpm25 %>% count(monthDate, pm25Cat),  
+       aes(monthDate, n/24, fill=pm25Cat)) +
+  geom_bar(stat="identity") +
+  scale_x_date(date_labels = "%Y/%m", date_breaks = "3 months") +
+  scale_fill_manual(values = c("green", "yellow", "orange","red",'purple','dark red'), guide = guide_legend(title = "PM2.5 Level")) +
+  ggtitle("Beijing PM 2.5 per month") +
+  coord_flip() +
+  labs(y="Count of days",x="Date") 
+  
+```
+
+#####污染爆表（6类）天多发于10，11月和1，2月。  
+
+
+####来看下污染爆表PM2.5达到令人发指的800以上分别有哪几天。
+```{r}
+bjpm25$date[bjpm25$pm2.5>800]
 
 ```
 
+#####巧合的是，2010-02-14和2012-01-23分别是2010和2012农历新年的大年初一。
+
+####让我们重点关注下春节前后PM2.5的变化。
 ```{r}
-ggplot(data=bjpm25new, aes(x=time,y=Iws,  size = pm25Cat, color = cbwd)) +
-  geom_point() +
-  scale_x_date(date_breaks = "3 month")
+bjpm25_newyear <- subset(bjpm25, date %in% as.Date(c('2010-02-13','2010-02-14','2011-02-02','2011-02-03','2012-01-22','2012-01-23','2013-02-09','2013-02-10','2014-01-29','2014-01-30')))
+bjpm25_newyear$date <- factor(bjpm25_newyear$date)
+
+ggplot(data=bjpm25_newyear, aes(x=hour, y=pm2.5)) +
+  geom_line() +
+  ggtitle("Beijing PM 2.5 during Spring Festival") +
+  facet_wrap(~date, nrow = 5)
 
 ```
 
-```{r}
-ggplot(data=bjpm25new, aes(x=pm2.5)) +
-  geom_histogram() +
-  facet_wrap(~year, nrow = 2)
+#####有意思的是，2010到2012这3年每逢春节跨年PM2.5都明显飙升，但是2013年有明显收敛，甚至2014年还略有下降。    
 
-```
-
+####PM2.5按月直方图
 ```{r}
-ggplot(data=bjpm25new, aes(x=pm2.5)) +
+ggplot(data=bjpm25, aes(x=pm2.5)) +
   geom_histogram() +
   facet_wrap(~month, nrow = 2)
 
 ```
 
+#####总体而言，1，2，3，10，11，12月份的空气质量相对较差。
+
+####PM2.5按小时直方图
 ```{r}
-ggplot(data=bjpm25new, aes(x=pm2.5)) +
+ggplot(data=bjpm25, aes(x=pm2.5)) +
   geom_histogram() +
   facet_wrap(~hour, nrow = 2)
 
 ```
 
+#####总体而言，凌晨时空气质量优于白天。
+
+####PM2.5和累计风速分类箱图
 ```{r}
-corrplot(cor(bjpm25new[,c('pm2.5','DEWP','TEMP','PRES','Iws','Ir','Is')]), method = "circle")
+ggplot(data=bjpm25, aes(x=IwsCat, y=pm2.5)) +
+  geom_boxplot() 
 
 ```
 
+#####随着风力增强，PM2.5均值值逐步下降，整体空气质量也向好。
+
+####PM2.5和风向箱图
+```{r}
+ggplot(data=bjpm25, aes(x=cbwd, y=pm2.5)) +
+  geom_boxplot() 
+
+```
+
+#####显然，刮西北风的时候空气质量较好。
+
+####PM2.5,累计风速分类和风向散点图
+```{r}
+ggplot(data=bjpm25, aes(x=date,y=pm2.5, size =IwsCat , color = cbwd)) +
+  geom_point() +
+  scale_x_date(date_breaks = "3 month")
+
+```
+
+#####再次应证沉在下面的多是风力较强的西北风，同时期的空气质量相对较好。  
+
+####相关系数
+```{r}
+corrplot(cor(bjpm25[,c('pm2.5','DEWP','TEMP','PRES','Iws','Ir','Is')]), method = "circle")
+
+```
+
+#####相关系数分析也显示累计风速与PM2.5呈现较强的反向关系。  
