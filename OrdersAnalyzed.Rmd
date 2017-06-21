@@ -1,0 +1,654 @@
+---
+title: "Data Insights into Orders"
+author: "Jun Zhang"
+date: "6/20/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE,fig.width=12, fig.height=8,fig.path = '/Users/edwzhang/Documents/figure/')
+```
+
+```{r}
+library(ggplot2)
+library(scales)
+library(gridExtra)
+library(grid)
+library(dplyr)
+library(lazyeval)
+library(rworldmap)
+library(reshape2)
+library(googleVis)
+op <- options(gvis.plot.tag='chart')
+library(countrycode)
+library(treemap)
+
+```
+
+```{r}
+#Read the raw Order data
+webexAnnuityOrders <-read.delim('/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersMerged.dsv', header = TRUE, sep = "\t")
+
+```
+
+```{r}
+#Convert into Logical(Boolean) data type and then into integer value 1 or 0
+webexAnnuityOrders$WEBEX.MESSENGER.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.MESSENGER.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.STORAGE.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.STORAGE.SERVICE.ENABLED))
+webexAnnuityOrders$CONFERENCING.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$CONFERENCING.SERVICE.ENABLED))
+webexAnnuityOrders$MESSAGING.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$MESSAGING.SERVICE.ENABLED))
+webexAnnuityOrders$STORAGE.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$STORAGE.SERVICE.ENABLED))
+webexAnnuityOrders$SPARK.BOARD.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$SPARK.BOARD.SERVICE.ENABLED))
+webexAnnuityOrders$SHARED.DEVICE.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$SHARED.DEVICE.SERVICE.ENABLED))
+webexAnnuityOrders$COMMUNICATIONS.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$COMMUNICATIONS.SERVICE.ENABLED))
+
+webexAnnuityOrders$WEBEX.AUDIO.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.AUDIO.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.CMR.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.CMR.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.CONFERENCING.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.CONFERENCING.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.EE.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.EE.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.EVENTS.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.EVENTS.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.TRAININGS.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.TRAININGS.SERVICE.ENABLED))
+webexAnnuityOrders$WEBEX.SUPPORT.SERVICE.ENABLED <- as.integer(as.logical(webexAnnuityOrders$WEBEX.SUPPORT.SERVICE.ENABLED))
+
+```
+
+```{r}
+webexAnnuityOrders$WEBEX.META.INTEGRATED.VOIP <- as.integer(as.logical(webexAnnuityOrders$WEBEX.META.INTEGRATED.VOIP))
+
+webexAnnuityOrders$WEBEX.AUDIO.CALL.BACK <- as.integer(as.logical(webexAnnuityOrders$WEBEX.AUDIO.CALL.BACK))
+
+indx = which( (webexAnnuityOrders$WEBEX.AUDIO.CALL.BACK.INTERNATIONA=='intl-29') & (webexAnnuityOrders$WEBEX.AUDIO.SERVICE.ENABLED==1),  arr.ind = TRUE)
+webexAnnuityOrders$WEBEX.AUDIO.CALL.BACK.INTERNATIONAL[indx] <- 'true'
+webexAnnuityOrders$WEBEX.AUDIO.CALL.BACK.INTERNATIONAL <- as.integer(as.logical(webexAnnuityOrders$WEBEX.AUDIO.CALL.BACK.INTERNATIONAL))
+
+webexAnnuityOrders$WEBEX.AUDIO.CALL.IN.TOLL <- as.integer(as.logical(webexAnnuityOrders$WEBEX.AUDIO.CALL.IN.TOLL))
+webexAnnuityOrders$WEBEX.AUDIO.CALL.IN.INTERNATIONAL <- as.integer(as.logical(webexAnnuityOrders$WEBEX.AUDIO.CALL.IN.INTERNATIONAL))
+webexAnnuityOrders$WEBEX.AUDIO.CALL.IN.TOLL.FREE <- as.integer(as.logical(webexAnnuityOrders$WEBEX.AUDIO.CALL.IN.TOLL.FREE))
+
+```
+
+
+```{r}
+#Convert into Date data type
+webexAnnuityOrders$ServiceEffectiveDate <- as.Date(webexAnnuityOrders$ServiceEffectiveDate, '%d-%b-%y')
+webexAnnuityOrders$OrderRecieveDate <- as.Date(webexAnnuityOrders$OrderRecieveDate, '%m/%d/%Y')
+webexAnnuityOrders$SiteProvisionDate <- as.Date(webexAnnuityOrders$SiteProvisionDate, '%m/%d/%Y')
+webexAnnuityOrders$EndCompleteDate <- as.Date(webexAnnuityOrders$EndCompleteDate, '%m/%d/%Y')
+
+```
+
+```{r}
+#Add new columns for year, month, week
+webexAnnuityOrders$week <-  strftime(webexAnnuityOrders$OrderRecieveDate, "%U")
+webexAnnuityOrders$month <-  strftime(webexAnnuityOrders$OrderRecieveDate, "%m")
+webexAnnuityOrders$year <-  strftime(webexAnnuityOrders$OrderRecieveDate, "%Y")
+
+webexAnnuityOrders$week <- factor(webexAnnuityOrders$week)
+webexAnnuityOrders$month <- factor(webexAnnuityOrders$month)
+webexAnnuityOrders$year <- factor(webexAnnuityOrders$year)
+
+```
+
+```{r}
+#Convert into String data type
+webexAnnuityOrders$SalesOrderID <- as.character(webexAnnuityOrders$SalesOrderID)
+webexAnnuityOrders$SiteURL <- as.character(webexAnnuityOrders$SiteURL)
+webexAnnuityOrders$CountryCode <- as.character(webexAnnuityOrders$CountryCode)
+webexAnnuityOrders$Language <- as.character(webexAnnuityOrders$Language)
+
+```
+
+```{r}
+#Update country code If original country code is US but primary language indicates some other country
+indx = which( (webexAnnuityOrders$CountryCode=='US') & (webexAnnuityOrders$Language !='en_us') ,  arr.ind = TRUE)
+webexAnnuityOrders$CountryCode[indx] <- toupper(unlist(strsplit(webexAnnuityOrders$Language[indx], '_'))[2])
+
+#IDN is not ISO2C; CS is no long valid
+webexAnnuityOrders$CountryCode[webexAnnuityOrders$CountryCode=='IDN'] <- 'ID'
+webexAnnuityOrders$CountryCode[webexAnnuityOrders$CountryCode=='CS'] <- 'RS'
+
+```
+
+```{r}
+# Unify product module and fill in the missing value
+# webexAnnuityOrders$ProductModule <- tolower(webexAnnuityOrders$ProductModule)
+# 
+# indx <- which((webexAnnuityOrders$ProductModule=='') & (webexAnnuityOrders$OfferType == 'WEBEX'),  arr.ind = TRUE)
+# webexAnnuityOrders$ProductModule[indx] <- ifelse(startsWith(as.character(webexAnnuityOrders$OfferName[indx]),'A-SPK'), 'jointoffer','trainclassic')
+
+
+
+```
+
+
+
+```{r Plot1WorldMapofWebexSites}
+# Plot Count of Webex Sites by country/region around the world
+# Count of unique Webex Sites per each Country
+webexAnnuityOrdersAggrbyCountry <- webexAnnuityOrders %>% filter(InstanceName=='SITE', CountryCode != '') %>% group_by(CountryCode) %>% summarise(WebExSitesCount = n_distinct(SiteURL)) %>% arrange(desc(WebExSitesCount))
+
+# Small countries are not displayed in this GoogleVis chart. Commented this out even though it's much simpler implementationwise.
+#webexAnnuityOrdersAggrbyCountry$CountryName <- #countrycode(webexAnnuityOrdersAggrbyCountry$CountryCode,'iso2c', 'country.name')
+#Geo=gvisGeoChart(webexAnnuityOrdersAggrbyCountry, locationvar="CountryName", 
+#                colorvar="WebExSitesCount",
+#                 options=list(projection="kavrayskiy-vii"))
+#plot(Geo)
+
+# annuityOrders_map_poly has both world map and annuityOrdersAggrbyCountry data merged together
+webeAnnuityOrders_map <- joinCountryData2Map(webexAnnuityOrdersAggrbyCountry, joinCode = "ISO2", nameJoinColumn = "CountryCode")
+webexAnnuityOrders_map_poly <- ggplot2::fortify(webeAnnuityOrders_map)
+webexAnnuityOrders_map_poly <- merge(webexAnnuityOrders_map_poly, webeAnnuityOrders_map@data, by.x="id", by.y="ADMIN", all.x=TRUE)
+
+#Ashmore and Cartier Islands is not a country; Add a new column which has both country name and number of Webex sites
+webexAnnuityOrders_map_poly$WebExSitesCount[webexAnnuityOrders_map_poly$id=='Ashmore and Cartier Islands'] <- NA
+webeAnnuityOrders_map@data$WebExSitesCount[webeAnnuityOrders_map@data$ADMIN=='Ashmore and Cartier Islands'] <- NA
+webeAnnuityOrders_map@data['Text'] <- paste(webeAnnuityOrders_map@data$ADMIN,webeAnnuityOrders_map@data$WebExSitesCount,sep = ':')
+
+# Plot Annuity Webex Sites in World Map
+ggplot() + 
+  coord_map(xlim = c(-180, 180), ylim = c(-60, 75))  +
+  geom_polygon(data = webexAnnuityOrders_map_poly, aes(long, lat, group=group,fill=WebExSitesCount), color='white', size = 0.3) +
+  scale_fill_gradient2(trans= 'log', breaks=c(0,10,100,200,4000), labels=c('<10','[11,100)','[101,200)','[201,4000)','>4000')) +
+  xlab(NULL) + 
+  ylab(NULL) +
+  guides(fill = guide_legend(
+    title='Number of Annunity WebEx Sites Around the World \n(June 1,2016 - June 1,2017)',
+    keywidth = 0.7, keyheight = 0.7, 
+    reverse=F, title.position="top")) +
+  theme(
+    plot.background = element_blank()
+   ,panel.grid.major = element_blank()
+   ,panel.grid.minor = element_blank()
+   ,panel.border = element_blank()
+   ,axis.ticks = element_blank()
+   ,axis.text.x = element_blank()
+   ,axis.text.y = element_blank()
+   ,legend.position = "bottom"
+   ,legend.direction = "horizontal"
+  ) +
+  geom_text(data=subset(webeAnnuityOrders_map@data,WebExSitesCount>0), aes(x=LON, y=LAT,label=Text), size=2.0) 
+
+```
+
+```{r Plot2PartnerTreeMap}
+#Plot the bar chart in order of partners that placed from the most number of orders to the least
+# Unify Partner Account Name
+webexAnnuityOrders$partnerAccountName <- tolower(webexAnnuityOrders$partnerAccountName)
+
+# Count of unique orders per each partner account name
+webexAnnuityOrdersAggrbyPartnerAccount <- webexAnnuityOrders  %>% filter(TransactionType=='Provide'|TransactionType=='Amend'|TransactionType=='Transfer'|TransactionType=='Renewal', partnerAccountName!='') %>%  group_by(partnerAccountName) %>% summarise(CCWOrderCount = n_distinct(SalesOrderID)) %>% arrange(desc(CCWOrderCount))
+
+#webexAnnuityOrdersAggrbyPartnerAccount$partnerAccountName <- #as.character(webexAnnuityOrdersAggrbyPartnerAccount$partnerAccountName)
+#webexAnnuityOrdersAggrbyPartnerAccount$partnerAccountName[webexAnnuityOrdersAggrbyPartnerA#ccount$partnerAccountName==''] <- 'Direct'
+
+# Add Partner Name
+webexAnnuityOrdersAggrbyPartnerAccount <- left_join(webexAnnuityOrdersAggrbyPartnerAccount, select(webexAnnuityOrders, c(partnerName,partnerAccountName)), by = "partnerAccountName")
+
+# Remove duplicates
+webexAnnuityOrdersAggrbyPartnerAccount <- webexAnnuityOrdersAggrbyPartnerAccount %>% distinct(partnerName, partnerAccountName, .keep_all = TRUE) %>% arrange(desc(CCWOrderCount))
+
+webexAnnuityOrdersAggrbyPartnerAccount$partnerAccountName <- factor(webexAnnuityOrdersAggrbyPartnerAccount$partnerAccountName)  
+
+treemap(subset(webexAnnuityOrdersAggrbyPartnerAccount,partnerAccountName!='Direct'),
+        index=c("partnerName","partnerAccountName"),  
+        vSize = "CCWOrderCount", 
+        title="Partner Orders", 
+        type="index",
+        title.legend="number of Partner orders",
+        fontsize.labels=10,
+        align.labels = list(c("center", "center"), c("right", "bottom")),
+        overlap.labels=1,
+        lowerbound.cex.labels=0,
+        inflate.labels=FALSE,
+        aspRatio=1.4)
+
+```
+
+```{r Plot3OrdersHitogram}
+#Plot Orders Histogram by Transaction type Over time
+# Plot histogram of Daily orders, A-SPK v.s. A-WX
+ggplot(aes(x=OrderRecieveDate,  fill=TransactionType), data=subset(webexAnnuityOrders,OfferType == 'WEBEX' & (ProductModule=='jointoffer' | ProductModule=='trainclassic'))) +
+  geom_histogram(binwidth = 1, alpha = 0.68) +
+  scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month")) +
+  ylab("Count of Service Orders") +
+  facet_wrap(~ProductModule, ncol=1, labeller = as_labeller(c('jointoffer'='A-SPK orders','trainclassic'='A-WX orders')), as.table=TRUE)
+
+```
+
+```{r}
+# Define a function to plot Service Booking Trend in New Orders
+plotServiceBookingTrendByWeek<- function(instanceName,serviceName) {
+  #serviceName = paste(serviceName,'.SERVICE.ENABLED',sep='')
+  
+  aggregatedServices <- webexAnnuityOrders %>% filter(InstanceName==instanceName, TransactionType=='Provide'|TransactionType=='Trransfer'|TransactionType=='Renewal',ProductModule!='') %>% group_by(year,week,ProductModule) %>% summarise_(totalCount = ~n(), serviceBookingRatio = interp(~ sum(service,na.rm=TRUE)/totalCount, service = as.name(serviceName)))
+  
+  aggregatedServices['date'] <- as.Date(paste(aggregatedServices$year,'01','01',sep='/'),'%Y/%m/%d') + 7*as.integer(aggregatedServices$week)
+  
+  aggregatedServices['ProductModule'] <- ifelse(aggregatedServices$ProductModule == 'jointoffer','A-SPK orders','A-WX orders')
+  
+  grob <- grobTree(textGrob(serviceName, x=0.1,  y=0.9, hjust=0))
+  
+  ggplot(data=aggregatedServices,aes(x=date, y=serviceBookingRatio*100,color=ProductModule)) +
+    geom_line() +
+    ylab('Booking Ratio(%)') +
+    xlab('Date') +
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))+
+    annotation_custom(grob)
+}
+
+
+```
+
+
+```{r Plot4SparkServicesBooking}
+# Spark Services
+p1=plotServiceBookingTrendByWeek('COMMON',"SPARK.BOARD.SERVICE.ENABLED")
+p2=plotServiceBookingTrendByWeek('COMMON',"CONFERENCING.SERVICE.ENABLED")
+p3=plotServiceBookingTrendByWeek('COMMON',"MESSAGING.SERVICE.ENABLED")
+p4=plotServiceBookingTrendByWeek('COMMON',"COMMUNICATIONS.SERVICE.ENABLED")
+p5=plotServiceBookingTrendByWeek('COMMON',"SHARED.DEVICE.SERVICE.ENABLED")
+p6=plotServiceBookingTrendByWeek('COMMON',"STORAGE.SERVICE.ENABLED")
+grid.arrange(p1,p2,p3,p4,p5,p6,ncol=2)
+
+```
+
+
+```{r Plot5MeetingServicesBooking}
+p1=plotServiceBookingTrendByWeek('SITE',"WEBEX.CONFERENCING.SERVICE.ENABLED")
+p2=plotServiceBookingTrendByWeek('SITE',"WEBEX.EE.SERVICE.ENABLED")
+p3=plotServiceBookingTrendByWeek('SITE',"WEBEX.TRAININGS.SERVICE.ENABLED")
+p4=plotServiceBookingTrendByWeek('SITE',"WEBEX.SUPPORT.SERVICE.ENABLED")
+p5=plotServiceBookingTrendByWeek('SITE',"WEBEX.EVENTS.SERVICE.ENABLED")
+p6=plotServiceBookingTrendByWeek('SITE',"WEBEX.CMR.SERVICE.ENABLED")
+p7=plotServiceBookingTrendByWeek('COMMON',"WEBEX.STORAGE.SERVICE.ENABLED")
+p8=plotServiceBookingTrendByWeek('COMMON',"WEBEX.MESSENGER.SERVICE.ENABLED")
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,ncol=2)
+
+```
+
+
+```{r Plot6CallTypesBooking}
+p1=plotServiceBookingTrendByWeek('SITE',"WEBEX.META.INTEGRATED.VOIP")
+p2=plotServiceBookingTrendByWeek('SITE',"WEBEX.AUDIO.CALL.IN.TOLL")
+p3=plotServiceBookingTrendByWeek('SITE',"WEBEX.AUDIO.CALL.IN.TOLL.FREE")
+p4=plotServiceBookingTrendByWeek('SITE',"WEBEX.AUDIO.CALL.IN.INTERNATIONAL")
+p5=plotServiceBookingTrendByWeek('SITE',"WEBEX.AUDIO.CALL.BACK")
+p6=plotServiceBookingTrendByWeek('SITE',"WEBEX.AUDIO.CALL.BACK.INTERNATIONAL")
+grid.arrange(p1,p2,p3,p4,p5,p6,ncol=2)
+
+```
+
+
+```{r Plot7EEUpsellDownsell}
+webexAnnuityEELicense <-read.delim('/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersEELicense.dsv', header = TRUE, sep = "\t")
+webexAnnuityEELicense$OrderRecieveDate <- as.Date(webexAnnuityEELicense$OrderRecieveDate, '%m/%d/%Y')
+webexAnnuityEELicense$FormerOrderRecieveDate <- as.Date(webexAnnuityEELicense$FormerOrderRecieveDate, '%m/%d/%Y')
+
+webexAnnuityEELicense$ChangeRate <- round((webexAnnuityEELicense$WEBEX.EE.TOTAL.LICENSE.VOLUME - webexAnnuityEELicense$WEBEX.EE.FORMER.TOTAL.LICENSE.VOLUME)*100.0/webexAnnuityEELicense$WEBEX.EE.FORMER.TOTAL.LICENSE.VOLUME,2)
+webexAnnuityEELicense$ChangeRate[is.na(webexAnnuityEELicense$ChangeRate)] <-0
+
+ggplot(subset(webexAnnuityEELicense,WEBEX.EE.License.Change=='Upsell'|WEBEX.EE.License.Change=='Downsell'),aes(x=OrderRecieveDate,y=ChangeRate,color=WEBEX.EE.License.Change,size=WEBEX.EE.TOTAL.LICENSE.VOLUME)) + 
+  geom_jitter(alpha=0.5) + 
+  coord_cartesian(ylim=c(-100,600)) +
+  xlab('Named Host Change Date') +
+  ylab('Named Host Increase Rate(%)') +
+  ggtitle('WebEx EE Named Host Increase Rate \n point size is proportional to actual Named Host value') + 
+  scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))
+
+webexAnnuityEELicenseMelted <- melt(webexAnnuityEELicense, id.vars=c('SiteURL','WEBEX.EE.License.Change','OrderRecieveDate','FormerOrderRecieveDate'), measure.vars=c('WEBEX.EE.FORMER.TOTAL.LICENSE.VOLUME','WEBEX.EE.TOTAL.LICENSE.VOLUME'))
+
+index <- which(((webexAnnuityEELicenseMelted$WEBEX.EE.License.Change=='Upsell') |(webexAnnuityEELicenseMelted$WEBEX.EE.License.Change=='Downsell') ) & (webexAnnuityEELicenseMelted$variable=='WEBEX.EE.FORMER.TOTAL.LICENSE.VOLUME'))
+
+webexAnnuityEELicenseMelted$OrderRecieveDate[index] <- webexAnnuityEELicenseMelted$FormerOrderRecieveDate[index]
+
+ggplot(data=subset(webexAnnuityEELicenseMelted,WEBEX.EE.License.Change=='Upsell'|WEBEX.EE.License.Change=='Downsell'),aes(x=OrderRecieveDate, y=value, color=WEBEX.EE.License.Change,group=SiteURL)) +
+    geom_line() +
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))  +
+    scale_y_log10()
+
+```
+
+
+```{r Plot8MCUpsellDownsell}
+webexAnnuityMCLicense <-read.delim('/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersMCLicense.dsv', header = TRUE, sep = "\t")
+webexAnnuityMCLicense$OrderRecieveDate <- as.Date(webexAnnuityMCLicense$OrderRecieveDate, '%m/%d/%Y')
+webexAnnuityMCLicense$FormerOrderRecieveDate <- as.Date(webexAnnuityMCLicense$FormerOrderRecieveDate, '%m/%d/%Y')
+
+webexAnnuityMCLicense$ChangeRate <- round((webexAnnuityMCLicense$WEBEX.CONFERENCING.TOTAL.LICENSE.VOLUME - webexAnnuityMCLicense$WEBEX.CONFERENCING.FORMER.TOTAL.LICENSE.VOLUME)*100.0/webexAnnuityMCLicense$WEBEX.CONFERENCING.FORMER.TOTAL.LICENSE.VOLUME,2)
+webexAnnuityMCLicense$ChangeRate[is.na(webexAnnuityMCLicense$ChangeRate)] <-0
+
+ggplot(subset(webexAnnuityMCLicense,WEBEX.CONFERENCING.License.Change=='Upsell'|WEBEX.CONFERENCING.License.Change=='Downsell'),aes(x=OrderRecieveDate,y=ChangeRate,color=WEBEX.CONFERENCING.License.Change,size=WEBEX.CONFERENCING.TOTAL.LICENSE.VOLUME)) + 
+  geom_jitter(alpha=0.5) + 
+  coord_cartesian(ylim=c(-100,600)) +
+  xlab('Named Host Change Date') +
+  ylab('Named Host Increase Rate(%)') +
+  ggtitle('WebEx Conferencing Named Host Increase Rate \n point size is proportional to actual Named Host value') + 
+  scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))
+
+webexAnnuityMCLicenseMelted <- melt(webexAnnuityMCLicense, id.vars=c('SiteURL','WEBEX.CONFERENCING.License.Change','OrderRecieveDate','FormerOrderRecieveDate'), measure.vars=c('WEBEX.CONFERENCING.FORMER.TOTAL.LICENSE.VOLUME','WEBEX.CONFERENCING.TOTAL.LICENSE.VOLUME'))
+
+index <- which(((webexAnnuityMCLicenseMelted$WEBEX.CONFERENCING.License.Change=='Upsell') |(webexAnnuityMCLicenseMelted$WEBEX.CONFERENCING.License.Change=='Downsell') ) & (webexAnnuityMCLicenseMelted$variable=='WEBEX.CONFERENCING.FORMER.TOTAL.LICENSE.VOLUME'))
+
+webexAnnuityMCLicenseMelted$OrderRecieveDate[index] <- webexAnnuityMCLicenseMelted$FormerOrderRecieveDate[index]
+
+ggplot(data=subset(webexAnnuityMCLicenseMelted,WEBEX.CONFERENCING.License.Change=='Upsell'|WEBEX.CONFERENCING.License.Change=='Downsell'),aes(x=OrderRecieveDate, y=value, color=WEBEX.CONFERENCING.License.Change,group=SiteURL)) +
+    geom_line() +
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))  +
+    scale_y_log10()
+
+```
+
+
+```{r Plot9CMRUpsellDownsell}
+webexAnnuityCMRLicense <-read.delim('/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersCMRLicense.dsv', header = TRUE, sep = "\t")
+webexAnnuityCMRLicense$OrderRecieveDate <- as.Date(webexAnnuityCMRLicense$OrderRecieveDate, '%m/%d/%Y')
+webexAnnuityCMRLicense$FormerOrderRecieveDate <- as.Date(webexAnnuityCMRLicense$FormerOrderRecieveDate, '%m/%d/%Y')
+
+webexAnnuityCMRLicense$ChangeRate <- round((webexAnnuityCMRLicense$WEBEX.CMR.TOTAL.LICENSE.VOLUME - webexAnnuityCMRLicense$WEBEX.CMR.FORMER.TOTAL.LICENSE.VOLUME)*100.0/webexAnnuityCMRLicense$WEBEX.CMR.FORMER.TOTAL.LICENSE.VOLUME,2)
+webexAnnuityCMRLicense$ChangeRate[is.na(webexAnnuityCMRLicense$ChangeRate)] <-0
+
+ggplot(subset(webexAnnuityCMRLicense,WEBEX.CMR.License.Change=='Upsell'|WEBEX.CMR.License.Change=='Downsell'),aes(x=OrderRecieveDate,y=ChangeRate,color=WEBEX.CMR.License.Change,size=WEBEX.CMR.TOTAL.LICENSE.VOLUME)) + 
+  geom_jitter(alpha=0.5) + 
+  coord_cartesian(ylim=c(-100,600)) +
+  ylab('License Increase Rate(%)') +
+  xlab('License Change Date') +
+  ggtitle('WebEx CMR License Increase Rate \n point size is proportional to actual Named Host value') + 
+  scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))
+
+webexAnnuityCMRLicenseAggr <- webexAnnuityCMRLicense %>% filter(WEBEX.CMR.License.Change=='Upsell'|WEBEX.CMR.License.Change=='Downsell') %>% group_by(SiteURL,WEBEX.CMR.License.Change) %>% summarise(count=n()) %>% arrange(desc(count))
+
+webexAnnuityCMRLicenseMelted <- melt(webexAnnuityCMRLicense, id.vars=c('SiteURL','WEBEX.CMR.License.Change','OrderRecieveDate','FormerOrderRecieveDate'), measure.vars=c('WEBEX.CMR.FORMER.TOTAL.LICENSE.VOLUME','WEBEX.CMR.TOTAL.LICENSE.VOLUME'))
+
+index <- which(((webexAnnuityCMRLicenseMelted$WEBEX.CMR.License.Change=='Upsell') |(webexAnnuityCMRLicenseMelted$WEBEX.CMR.License.Change=='Downsell') ) & (webexAnnuityCMRLicenseMelted$variable=='WEBEX.CMR.FORMER.TOTAL.LICENSE.VOLUME'))
+
+webexAnnuityCMRLicenseMelted$OrderRecieveDate[index] <- webexAnnuityCMRLicenseMelted$FormerOrderRecieveDate[index]
+
+ggplot(data=subset(webexAnnuityCMRLicenseMelted,WEBEX.CMR.License.Change=='Upsell'|WEBEX.CMR.License.Change=='Downsell'),aes(x=OrderRecieveDate, y=value, color=WEBEX.CMR.License.Change,group=SiteURL)) +
+    geom_line() +
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))  +
+    scale_y_log10()
+
+```
+
+
+
+```{r}
+webexAnnuitySessionSwap <-read.delim('/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersSessionSwap.dsv', header = TRUE, sep = "\t")
+
+```
+
+
+```{r Plot10MCSessionSwap}
+MCSessionSwappedCount <- webexAnnuitySessionSwap %>% filter(TransactionType=='Amend'|TransactionType=='Transfer',WEBEX.CONFERENCING.Session.Swap=='Swapped') %>% group_by(WEBEX.CONFERENCING.FORMER.SESSION.ID,WEBEX.CONFERENCING.SESSION.ID) %>% summarise(count=n())
+
+MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID==3] <- 'Pro Meeting '
+MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID==123] <- 'Pro 25 '
+MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID==214] <- 'Pro 200 '
+MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.FORMER.SESSION.ID==564] <- 'Pro 1000 '
+
+MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID==3] <- 'Pro Meeting'
+MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID==123] <- 'Pro 25'
+MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID==214] <- 'Pro 200'
+MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID[MCSessionSwappedCount$WEBEX.CONFERENCING.SESSION.ID==564] <- 'Pro 1000'
+
+sk_MC <- gvisSankey(MCSessionSwappedCount, from="WEBEX.CONFERENCING.FORMER.SESSION.ID", to="WEBEX.CONFERENCING.SESSION.ID", weight="count")
+
+print(sk_MC, tag = 'chart')
+
+```
+
+
+```{r Plot11TCSessionSwap}
+TCSessionSwappedCount <- webexAnnuitySessionSwap %>% filter(TransactionType=='Amend'|TransactionType=='Transfer',WEBEX.TRAININGS.Session.Swap=='Swapped') %>% group_by(WEBEX.TRAININGS.FORMER.SESSION.ID,WEBEX.TRAININGS.SESSION.ID) %>% summarise(count=n())
+
+TCSessionSwappedCount$WEBEX.TRAININGS.FORMER.SESSION.ID[TCSessionSwappedCount$WEBEX.TRAININGS.FORMER.SESSION.ID==522] <- 'Training 1000 '
+TCSessionSwappedCount$WEBEX.TRAININGS.FORMER.SESSION.ID[TCSessionSwappedCount$WEBEX.TRAININGS.FORMER.SESSION.ID==11] <- 'Training session '
+
+TCSessionSwappedCount$WEBEX.TRAININGS.SESSION.ID[TCSessionSwappedCount$WEBEX.TRAININGS.SESSION.ID==522] <- 'Training 1000'
+TCSessionSwappedCount$WEBEX.TRAININGS.SESSION.ID[TCSessionSwappedCount$WEBEX.TRAININGS.SESSION.ID==11] <- 'Training session'
+
+sk_TC <- gvisSankey(TCSessionSwappedCount, from="WEBEX.TRAININGS.FORMER.SESSION.ID", to="WEBEX.TRAININGS.SESSION.ID", weight="count")
+
+plot(sk_TC)
+
+```
+
+
+```{r Plot12ECSessionSwap}
+ECSessionSwappedCount <- webexAnnuitySessionSwap %>% filter(TransactionType=='Amend'|TransactionType=='Transfer',WEBEX.EVENTS.Session.Swap=='Swapped') %>% group_by(WEBEX.EVENTS.FORMER.SESSION.ID,WEBEX.EVENTS.SESSION.ID) %>% summarise(count=n())
+
+ECSessionSwappedCount$WEBEX.EVENTS.FORMER.SESSION.ID[ECSessionSwappedCount$WEBEX.EVENTS.FORMER.SESSION.ID==9] <- 'Online Event '
+ECSessionSwappedCount$WEBEX.EVENTS.FORMER.SESSION.ID[ECSessionSwappedCount$WEBEX.EVENTS.FORMER.SESSION.ID==220] <- 'Event 1000 '
+ECSessionSwappedCount$WEBEX.EVENTS.SESSION.ID[ECSessionSwappedCount$WEBEX.EVENTS.SESSION.ID==9] <- 'Online Event'
+ECSessionSwappedCount$WEBEX.EVENTS.SESSION.ID[ECSessionSwappedCount$WEBEX.EVENTS.SESSION.ID==220] <- 'Event 1000'
+
+sk_EC <- gvisSankey(ECSessionSwappedCount, from="WEBEX.EVENTS.FORMER.SESSION.ID", to="WEBEX.EVENTS.SESSION.ID", weight="count")
+
+plot(sk_EC)
+```
+
+
+```{r Plot13SCSessionSwap}
+SCSessionSwappedCount <- webexAnnuitySessionSwap %>% filter(TransactionType=='Amend'|TransactionType=='Transfer',WEBEX.SUPPORT.Session.Swap=='Swapped') %>% group_by(WEBEX.SUPPORT.FORMER.SESSION.ID,WEBEX.SUPPORT.SESSION.ID) %>% summarise(count=n())
+
+SCSessionSwappedCount$WEBEX.SUPPORT.FORMER.SESSION.ID[SCSessionSwappedCount$WEBEX.SUPPORT.FORMER.SESSION.ID==13] <- 'Remote Support Session '
+SCSessionSwappedCount$WEBEX.SUPPORT.FORMER.SESSION.ID[SCSessionSwappedCount$WEBEX.SUPPORT.FORMER.SESSION.ID==565] <- 'Support 1000 '
+SCSessionSwappedCount$WEBEX.SUPPORT.SESSION.ID[SCSessionSwappedCount$WEBEX.SUPPORT.SESSION.ID==13] <- 'Remote Support Session'
+SCSessionSwappedCount$WEBEX.SUPPORT.SESSION.ID[SCSessionSwappedCount$WEBEX.SUPPORT.SESSION.ID==565] <- 'Support 1000'
+
+sk_SC <- gvisSankey(SCSessionSwappedCount, from="WEBEX.SUPPORT.FORMER.SESSION.ID", to="WEBEX.SUPPORT.SESSION.ID", weight="count")
+
+plot(sk_SC)
+
+```
+
+```{r}
+# Define a function that aggregates Service change types among change orders
+webexAnnuityServiceNameChangeAggr <- function(serviceName){
+  if (serviceName == 'WEBEX.CMR'){
+    servicePath = '/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersCMRChange.dsv'
+  } else if (serviceName == 'WEBEX.EE'){
+    servicePath = '/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersEEChange.dsv'
+  } else if (serviceName == 'WEBEX.CONFERENCING'){
+    servicePath = '/Users/edwzhang/Documents/Machine Learning/WebExAnnuityOrders/WebExAnnuityOrdersMCChange.dsv'
+  }else
+    return('Input error!')
+  webexAnnuityServiceChange <-read.delim(servicePath, header = TRUE, sep = "\t")
+  serviceChangeType = paste(serviceName,'.SERVICE.ENABLED.Change.Type',sep = '')
+
+  indx <- which(webexAnnuityServiceChange[[serviceChangeType]]=='',arr.ind = TRUE)
+  webexAnnuityServiceChange[[serviceChangeType]]<-as.character(webexAnnuityServiceChange[[serviceChangeType]])
+  webexAnnuityServiceChange[indx,serviceChangeType]<- 'First Order'
+  webexAnnuityServiceChange[[serviceChangeType]]<-factor(webexAnnuityServiceChange[[serviceChangeType]])
+  
+  webexAnnuityServiceChangeAggr <- webexAnnuityServiceChange  %>% filter(TransactionType=='Amend'|TransactionType=='Transfer') %>% group_by_(.dots = serviceChangeType) %>% summarise(serviceOrdercount=n())
+  webexAnnuityServiceChangeAggr$ServiceName <- serviceName
+  webexAnnuityServiceChangeAggr$ChangeType <- webexAnnuityServiceChangeAggr[[serviceChangeType]]
+  drops = c(serviceChangeType)
+  webexAnnuityServiceChangeAggr <- webexAnnuityServiceChangeAggr[ , !(names(webexAnnuityServiceChangeAggr) %in% drops)]
+  
+  return(webexAnnuityServiceChangeAggr)
+}
+
+```
+
+
+```{r Plot14ServiceEnabledDisable}
+webexAnnuityMCChangeAggr <- webexAnnuityServiceNameChangeAggr('WEBEX.CONFERENCING')
+webexAnnuityEEChangeAggr <- webexAnnuityServiceNameChangeAggr('WEBEX.EE')
+webexAnnuityCMRChangeAggr <- webexAnnuityServiceNameChangeAggr('WEBEX.CMR')
+
+webexAnnuityServiceChangeAggr <- rbind(webexAnnuityMCChangeAggr,webexAnnuityEEChangeAggr)
+webexAnnuityServiceChangeAggr <- rbind(webexAnnuityServiceChangeAggr,webexAnnuityCMRChangeAggr)
+
+webexAnnuityServiceChangeAggr$ServiceName <- factor(webexAnnuityServiceChangeAggr$ServiceName)
+
+p1 <- ggplot(webexAnnuityServiceChangeAggr[order(webexAnnuityServiceChangeAggr$serviceOrdercount, decreasing = TRUE),], aes(x=ServiceName,y=serviceOrdercount,fill=ChangeType)) + 
+  geom_bar(stat = 'identity') + 
+  ggtitle('Service Enable/Disable among Change orders')
+
+p2 <- ggplot(webexAnnuityServiceChangeAggr[order(webexAnnuityServiceChangeAggr$serviceOrdercount, decreasing = TRUE),], aes(x=ServiceName,y=serviceOrdercount,fill=ChangeType)) + 
+  geom_bar(stat = 'identity') +
+  scale_y_sqrt() + 
+  coord_cartesian(ylim=c(5000,14000)) +
+  theme(axis.text.y=element_blank())+ 
+  ggtitle('Zoomed in with Sqrt transformation')
+
+grid.arrange(p1,p2,ncol=1)
+
+```
+
+```{r}
+webexAnnuityOrdersAutoManualRatioAggr <- function(measureAttribute){
+  webexAnnuityOrdersFulfilled <- subset(webexAnnuityOrders,EndCompleteFlag=='Y' & OfferType == 'WEBEX' &((ProductModule == 'trainclassic') | (ProductModule=='jointoffer'&InstanceName=='SITE')) )
+  
+  if(measureAttribute=='PureAuto'){
+    webexAnnuityOrdersMeasureProvisioned <- subset(webexAnnuityOrdersFulfilled, O2SCloseFlag=='Y' & ManualServiceFlag=='N' & AutoFailureFlag=='N' & PendingBrandingFlag=='N' & InternalErrorFlag=='N')
+  }else if(measureAttribute=='ManualService'){
+    webexAnnuityOrdersMeasureProvisioned <- subset(webexAnnuityOrdersFulfilled,  ManualServiceFlag=='Y' )
+  }else if(measureAttribute=='AutoFailed'){
+    webexAnnuityOrdersMeasureProvisioned <- subset(webexAnnuityOrdersFulfilled,  AutoFailureFlag=='Y')
+  }else if(measureAttribute=='ManualBranding'){
+    webexAnnuityOrdersMeasureProvisioned <- subset(webexAnnuityOrdersFulfilled,  PendingBrandingFlag=='Y')
+  }else if(measureAttribute=='CPFInternalError'){
+    webexAnnuityOrdersMeasureProvisioned <- subset(webexAnnuityOrdersFulfilled,  InternalErrorFlag=='Y')
+  }
+  
+    
+    webexAnnuityOrdersFulfilled['date']<- as.Date(paste(webexAnnuityOrdersFulfilled$year,'01','01',sep='/'),'%Y/%m/%d') + 7*as.integer(webexAnnuityOrdersFulfilled$week)
+
+    webexAnnuityOrdersMeasureProvisioned['date']<- as.Date(paste(webexAnnuityOrdersMeasureProvisioned$year,'01','01',sep='/'),'%Y/%m/%d') + 7*as.integer(webexAnnuityOrdersMeasureProvisioned$week)
+    
+    webexAnnuityOrdersFulfilledByWeek <- webexAnnuityOrdersFulfilled %>% group_by(date,ProductModule,TransactionType) %>% summarise(total.count=n())
+    webexAnnuityOrdersMeasureProvisionedByWeek <- webexAnnuityOrdersMeasureProvisioned %>% group_by(date,ProductModule,TransactionType) %>% summarise(weekly.count=n())
+    
+    webexAnnuityOrdersMergedByWeek <- merge(webexAnnuityOrdersFulfilledByWeek, webexAnnuityOrdersMeasureProvisionedByWeek)
+    webexAnnuityOrdersMergedByWeek <- transform(webexAnnuityOrdersMergedByWeek, weekly.percent = 100 * weekly.count/total.count)
+    
+    webexAnnuityOrdersMergedByWeek$TransactionType <- factor(webexAnnuityOrdersMergedByWeek$TransactionType, levels = c('Provide','Amend','Transfer','Renewal','Cease','Suspend'))
+    
+    return(webexAnnuityOrdersMergedByWeek)
+}
+
+```
+
+
+```{r Plot15AutoRatio}
+
+ggplot(data=subset(webexAnnuityOrdersAutoManualRatioAggr('PureAuto'),TransactionType!='Suspend'&TransactionType!='Renewal'),aes(x=date, y=weekly.percent, color=ProductModule)) +
+    geom_line() +
+    ylab('100% Auto Provision Ratio(%)') +
+    xlab('OrderRecieveDate') +
+    ggtitle("CPF Provision Automation Trend")+
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month")) +
+    facet_wrap(~TransactionType, ncol=2)
+
+```
+
+```{r Plot16ManualService}
+ggplot(data=subset(webexAnnuityOrdersAutoManualRatioAggr('CPFInternalError'),TransactionType!='Suspend'&TransactionType!='Renewal'),aes(x=date, y=weekly.percent, color=ProductModule)) +
+    geom_line() +
+    ylab('Manual Service Proportion(%)') +
+    xlab('OrderRecieveDate') +
+    ggtitle("WebEx Annuity Orders Manual Service Proportion Trend")+
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month")) +
+    facet_wrap(~TransactionType, ncol=2)
+
+
+```
+
+```{r Plot17APIFailure}
+ggplot(data=subset(webexAnnuityOrdersAutoManualRatioAggr('AutoFailed'),TransactionType!='Suspend'&TransactionType!='Renewal'),aes(x=date, y=weekly.percent, color=ProductModule)) +
+    geom_line() +
+    ylab('API Call Failures Proportion(%)') +
+    xlab('OrderRecieveDate') +
+    ggtitle("WebEx Annuity Orders API Call Failures Proportion Trend")+
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month")) +
+    facet_wrap(~TransactionType, ncol=2)
+
+```
+
+```{r Plot18CPFError}
+ggplot(data=subset(webexAnnuityOrdersAutoManualRatioAggr('CPFInternalError'),TransactionType!='Suspend'&TransactionType!='Renewal'),aes(x=date, y=weekly.percent, color=ProductModule)) +
+    geom_line() +
+    ylab('CPF Internal Exceptions Proportion(%)') +
+    xlab('OrderRecieveDate') +
+    ggtitle("WebEx Annuity Orders CPF Internal Exceptions Proportion Trend")+
+    scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month")) +
+    facet_wrap(~TransactionType, ncol=2)
+
+```
+
+```{r Plot19CPFProvisionSLA}
+
+webexAnnuityOrdersFulfilled <- subset(webexAnnuityOrders,EndCompleteFlag=='Y' & OfferType == 'WEBEX' &((ProductModule == 'trainclassic') | (ProductModule=='jointoffer'&InstanceName=='SITE')) )
+webexAnnuityOrdersFulfilled$OrderFulfillmentSLAInDaysCPFRange <- ordered(cut(round(webexAnnuityOrdersFulfilled$OrderFulfillmentSLAInHoursCPF/24),c(-1,1,3,7,365),labels = c('Within 1 Day','1 - 3 Days','3 - 7 Days', 'More than 7 Days')))
+
+webexAnnuityOrdersFulfilled['date'] <- as.Date(paste(webexAnnuityOrdersFulfilled$year,'01','01',sep='/'),'%Y/%m/%d') + 7*as.integer(webexAnnuityOrdersFulfilled$week)
+
+webexAnnuityOrdersFulfilledAggrbyRange <- webexAnnuityOrdersFulfilled  %>%  group_by(date,OrderFulfillmentSLAInDaysCPFRange) %>% summarise(count = n())
+
+# Plot Order Fulfillment Time Range Over Time
+ggplot(webexAnnuityOrdersFulfilledAggrbyRange, aes(x = date, y = count, group = OrderFulfillmentSLAInDaysCPFRange, fill = OrderFulfillmentSLAInDaysCPFRange)) +
+  geom_bar(stat = 'identity',position = "stack") +
+  xlab('OrderRecieveDate') +
+  ylab('Service Order Count') +
+  ggtitle('WebEx Annuity Order Fulfillment Time in CPF')+
+  scale_fill_manual(values=c('aliceblue','lightblue','cyan','blue','red'))
+
+df1 <- webexAnnuityOrdersFulfilled %>% group_by(date) %>% summarise(total.count=n())
+
+df2 <- subset(webexAnnuityOrdersFulfilled, OrderFulfillmentSLAInDaysCPFRange == 'Within 1 Day') %>% group_by(date) %>% summarise(within1day.count=n())
+
+df3 <- subset(webexAnnuityOrdersFulfilled, OrderFulfillmentSLAInDaysCPFRange == '1 - 3 Days') %>% group_by(date) %>% summarise(between1and3Days.count=n())
+
+df4 <- subset(webexAnnuityOrdersFulfilled, OrderFulfillmentSLAInDaysCPFRange == '3 - 7 Days') %>% group_by(date) %>% summarise(between3and7Days.count=n())
+
+df5 <- subset(webexAnnuityOrdersFulfilled, OrderFulfillmentSLAInDaysCPFRange == 'More than 7 Days') %>% group_by(date) %>% summarise(morethan7Days.count=n())
+
+
+df <- merge(merge(merge(merge(df1,df2),df3),df4),df5)
+
+df <- transform(df, within1day.percent =  100 * within1day.count/total.count)
+df <- transform(df, between1and3Days.percent =  100 * between1and3Days.count/total.count)
+df <- transform(df, between3and7Days.percent =  100 * between3and7Days.count/total.count)
+df <- transform(df, morethan7Days.percent =  100 * morethan7Days.count/total.count)
+
+# Plot Normalized Order Fulfillment Time Range Ratio Over Time
+ggplot() +
+  geom_ribbon(aes(x=date,ymin=0,ymax=within1day.percent), data=df, fill = 'aliceblue') +
+  geom_ribbon(aes(x=date,ymin=within1day.percent, ymax=between1and3Days.percent + within1day.percent),data=df,fill='lightblue') +
+  geom_ribbon(aes(x=date,ymin=between1and3Days.percent + within1day.percent, ymax=between3and7Days.percent +between1and3Days.percent + within1day.percent),data=df,fill='cyan')  +
+  geom_ribbon(aes(x=date,ymax=100, ymin=between3and7Days.percent +between1and3Days.percent + within1day.percent),data=df,fill='blue') +
+  geom_text(aes(x=as.Date('2016-07-15'),y=50,label='Within 1 day'), size=3.0) +
+  geom_text(aes(x=as.Date('2016-07-15'),y=75,label='Within 1 to 3 days'), size=3.0) +
+  geom_text(aes(x=as.Date('2016-07-15'),y=88,label='Within 3 to 7 days'), size=3.0) +
+  geom_text(aes(x=as.Date('2016-07-15'),y=98,label='More than 7 days'), size=3.0) +
+  xlab('OrderRecieveDate') +
+  ylab('WebEx Annuity Order Fulfillment Time Distribution(%)') +
+  ggtitle('Normalized WebEx Annuity Order Fulfillment Time in CPF')+
+  scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month"))
+
+```
+
+```{r Plot20RSD}
+webexAnnuityOrdersFulfilled <- subset(webexAnnuityOrders,EndCompleteFlag=='Y' & OfferType == 'WEBEX' &((ProductModule == 'trainclassic') | (ProductModule=='jointoffer'&InstanceName=='SITE')) )
+
+ggplot(aes(x=OrderRecieveDate,y=DelayInDays,color=TransactionType),data=subset(webexAnnuityOrdersFulfilled, !is.na(DelayInDays))) +
+  geom_jitter(alpha=0.5) +
+  scale_x_date(labels = date_format("%Y/%m"), breaks = date_breaks("month")) +
+  scale_y_continuous(limits = c(-10, 10), breaks = seq(-100, 100, 1)) +
+  labs(title = "Request Start Date Early V.S. Delay \n while line in the middle in the mean value") +
+  xlab('Delay in Days(Negative:Early, Positive:Delay)') +
+  stat_summary(aes(y = DelayInDays,group=1), fun.y=mean, colour="white", geom="line",group=1) +
+  geom_hline(yintercept = 0,linetype="dashed") +
+  facet_wrap(~ProductModule, ncol=1, labeller = as_labeller(c('jointoffer'='A-SPK orders','trainclassic'='A-WX orders')), as.table=TRUE)
+
+```
+
+
+```{r}
+options(op)
+
+```
+
